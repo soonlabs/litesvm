@@ -267,7 +267,10 @@ impl LiteSVM {
         accounts: Vec<(Pubkey, AccountSharedData)>,
     ) -> Result<(), LiteSVMError> {
         for (pubkey, account) in accounts {
-            self.accounts.add_account(pubkey, account)?;
+            self.accounts.add_account(pubkey, account).map_err(|e| {
+                error!("Error importing account {pubkey}: {e:?}");
+                e
+            })?;
         }
         Ok(())
     }
