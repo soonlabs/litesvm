@@ -259,6 +259,17 @@ impl LiteSVM {
         self.accounts.add_account(pubkey, data.into())
     }
 
+    /// Import accounts from a vector of (pubkey, account) pairs.
+    pub fn import_accounts(
+        &mut self,
+        accounts: Vec<(Pubkey, AccountSharedData)>,
+    ) -> Result<(), LiteSVMError> {
+        for (pubkey, account) in accounts {
+            self.accounts.add_account(pubkey, account)?;
+        }
+        Ok(())
+    }
+
     /// Gets the balance of the provided account pubkey.
     pub fn get_balance(&self, pubkey: &Pubkey) -> Option<u64> {
         self.accounts.get_account(pubkey).map(|x| x.lamports())
