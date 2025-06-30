@@ -75,6 +75,10 @@ mod history;
 mod spl;
 mod utils;
 
+pub use solana_sdk::account::Account as LiteSVMAccount;
+pub use solana_sdk::account::AccountSharedData as LiteSVMAccountSharedData;
+pub use solana_sdk::pubkey::Pubkey as LiteSVMPubkey;
+
 // The test code doesn't actually get run because it's not
 // what doctest expects but at least it
 // compiles it so we'll see if there's a compile-time error.
