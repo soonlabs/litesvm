@@ -270,6 +270,10 @@ impl LiteSVM {
         Ok(())
     }
 
+    pub fn export_accounts(&self) -> Vec<(Pubkey, AccountSharedData)> {
+        self.accounts.all_accounts()
+    }
+
     /// Gets the balance of the provided account pubkey.
     pub fn get_balance(&self, pubkey: &Pubkey) -> Option<u64> {
         self.accounts.get_account(pubkey).map(|x| x.lamports())

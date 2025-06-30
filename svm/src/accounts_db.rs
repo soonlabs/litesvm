@@ -92,6 +92,14 @@ impl AccountsDb {
         Ok(())
     }
 
+    /// Get all accounts in the database.
+    pub(crate) fn all_accounts(&self) -> Vec<(Pubkey, AccountSharedData)> {
+        self.inner
+            .iter()
+            .map(|(pubkey, account)| (*pubkey, account.clone()))
+            .collect()
+    }
+
     fn maybe_handle_sysvar_account(
         &mut self,
         pubkey: Pubkey,
