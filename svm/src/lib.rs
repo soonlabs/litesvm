@@ -77,6 +77,8 @@ mod utils;
 
 pub use solana_sdk::account::Account as LiteSVMAccount;
 pub use solana_sdk::account::AccountSharedData as LiteSVMAccountSharedData;
+pub use solana_sdk::account::ReadableAccount as LiteSVMAccountReadable;
+pub use solana_sdk::account::WritableAccount as LiteSVMAccountWritable;
 pub use solana_sdk::pubkey::Pubkey as LiteSVMPubkey;
 
 // The test code doesn't actually get run because it's not
