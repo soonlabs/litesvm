@@ -20,7 +20,6 @@ use solana_sdk::{
     account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
     bpf_loader,
     clock::Clock,
-    epoch_rewards::EpochRewards,
     epoch_schedule::EpochSchedule,
     feature_set::{
         include_loaded_accounts_data_size_in_fee_calculation, remove_rounding_in_fee_calculation,
@@ -39,11 +38,10 @@ use solana_sdk::{
     reserved_account_keys::ReservedAccountKeys,
     signature::{Keypair, Signature},
     signer::Signer,
-    slot_hashes::SlotHashes,
     slot_history::SlotHistory,
     stake_history::StakeHistory,
     system_instruction, system_program,
-    sysvar::{last_restart_slot::LastRestartSlot, Sysvar, SysvarId},
+    sysvar::{Sysvar, SysvarId},
     transaction::{MessageHash, SanitizedTransaction, TransactionError, VersionedTransaction},
     transaction_context::{ExecutionRecord, IndexOfAccount, TransactionContext},
 };
@@ -61,6 +59,7 @@ use crate::{
     builtin::BUILTINS,
     error::LiteSVMError,
     history::TransactionHistory,
+    precompiles::load_precompiles,
     spl::load_spl_programs,
     types::{ExecutionResult, FailedTransactionMetadata, TransactionMetadata, TransactionResult},
     utils::{create_blockhash, rent::RentState},
@@ -72,6 +71,7 @@ pub mod types;
 mod accounts_db;
 mod builtin;
 mod history;
+mod precompiles;
 mod spl;
 mod utils;
 
@@ -153,12 +153,12 @@ impl LiteSVM {
     /// Includes the default sysvars.
     pub fn with_sysvars(mut self) -> Self {
         self.set_sysvar(&Clock::default());
-        self.set_sysvar(&EpochRewards::default());
+        // self.set_sysvar(&EpochRewards::default());
         self.set_sysvar(&EpochSchedule::default());
         #[allow(deprecated)]
         let fees = Fees::default();
-        self.set_sysvar(&fees);
-        self.set_sysvar(&LastRestartSlot::default());
+        // self.set_sysvar(&fees);
+        // self.set_sysvar(&LastRestartSlot::default());
         let latest_blockhash = self.latest_blockhash;
         #[allow(deprecated)]
         self.set_sysvar(&RecentBlockhashes::from_iter([IterItem(
@@ -167,13 +167,24 @@ impl LiteSVM {
             fees.fee_calculator.lamports_per_signature,
         )]));
         self.set_sysvar(&Rent::default());
-        self.set_sysvar(&SlotHashes::new(&[(
-            self.accounts.sysvar_cache.get_clock().unwrap().slot,
-            latest_blockhash,
-        )]));
+        // self.set_sysvar(&SlotHashes::new(&[(
+        //     self.accounts.sysvar_cache.get_clock().unwrap().slot,
+        //     latest_blockhash,
+        // )]));
         self.set_sysvar(&SlotHistory::default());
         self.set_sysvar(&StakeHistory::default());
+        // self.set_sysvar();
         self
+    }
+
+    pub fn with_precompiles(mut self, feature_set: Option<FeatureSet>) -> Self {
+        self.set_precompiles(feature_set);
+        self
+    }
+
+    fn set_precompiles(&mut self, feature_set: Option<FeatureSet>) {
+        let feature_set = feature_set.unwrap_or_else(FeatureSet::all_enabled);
+        load_precompiles(self, feature_set);
     }
 
     /// Changes the default builtins.
@@ -267,6 +278,19 @@ impl LiteSVM {
         accounts: Vec<(Pubkey, AccountSharedData)>,
     ) -> Result<(), LiteSVMError> {
         for (pubkey, account) in accounts {
+            if let Some(existing_account) = self.accounts.get_account(&pubkey) {
+                // compare the data of the existing account and the new account
+                if existing_account != account {
+                    error!(
+                        "Account {pubkey} already exists with different data: existing: {:?}, new: {:?}",
+                        existing_account,
+                        account
+                    );
+                } else {
+                    continue;
+                }
+            }
+
             self.accounts.add_account(pubkey, account).map_err(|e| {
                 error!("Error importing account {pubkey}: {e:?}");
                 e
@@ -277,6 +301,10 @@ impl LiteSVM {
 
     pub fn export_accounts(&self) -> Vec<(Pubkey, AccountSharedData)> {
         self.accounts.all_accounts()
+    }
+
+    pub fn all_accounts_len(&self) -> usize {
+        self.accounts.all_accounts_len()
     }
 
     /// Gets the balance of the provided account pubkey.
