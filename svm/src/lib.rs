@@ -35,6 +35,7 @@ use solana_sdk::{
     nonce_account,
     pubkey::Pubkey,
     rent::Rent,
+    rent_collector::RENT_EXEMPT_RENT_EPOCH,
     reserved_account_keys::ReservedAccountKeys,
     signature::{Keypair, Signature},
     signer::Signer,
@@ -75,11 +76,16 @@ mod precompiles;
 mod spl;
 mod utils;
 
+pub use solana_sdk as svm_sdk;
 pub use solana_sdk::account::Account as LiteSVMAccount;
 pub use solana_sdk::account::AccountSharedData as LiteSVMAccountSharedData;
 pub use solana_sdk::account::ReadableAccount as LiteSVMAccountReadable;
 pub use solana_sdk::account::WritableAccount as LiteSVMAccountWritable;
+pub use solana_sdk::message::Message as LiteSVMMessage;
 pub use solana_sdk::pubkey::Pubkey as LiteSVMPubkey;
+pub use solana_sdk::signer::Signer as LiteSVMSigner;
+pub use solana_sdk::system_instruction::{create_account, transfer};
+pub use solana_sdk::transaction::Transaction as LiteSVMTransaction;
 
 // The test code doesn't actually get run because it's not
 // what doctest expects but at least it
@@ -98,7 +104,7 @@ pub struct LiteSVM {
     compute_budget: Option<ComputeBudget>,
     sigverify: bool,
     blockhash_check: bool,
-    fee_structure: FeeStructure,
+    fee_structure: Option<FeeStructure>,
     log_bytes_limit: Option<usize>,
 }
 
@@ -114,7 +120,7 @@ impl Default for LiteSVM {
             compute_budget: None,
             sigverify: false,
             blockhash_check: false,
-            fee_structure: FeeStructure::default(),
+            fee_structure: None,
             log_bytes_limit: Some(10_000),
         }
     }
@@ -147,6 +153,11 @@ impl LiteSVM {
     /// Enables or disables the blockhash check.
     pub fn with_blockhash_check(mut self, check: bool) -> Self {
         self.blockhash_check = check;
+        self
+    }
+
+    pub fn with_fee_structure(mut self, fee_structure: FeeStructure) -> Self {
+        self.fee_structure = Some(fee_structure);
         self
     }
 
@@ -513,14 +524,19 @@ impl LiteSVM {
             .flat_map(|instruction| &instruction.accounts)
             .unique()
             .collect::<Vec<&u8>>();
-        let fee = self.fee_structure.calculate_fee(
-            message,
-            self.fee_structure.lamports_per_signature,
-            &compute_budget_limits.into(),
-            self.feature_set
-                .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
-            self.feature_set
-                .is_active(&remove_rounding_in_fee_calculation::id()),
+        let fee = self.fee_structure.as_ref().map_or_else(
+            || 0,
+            |f| {
+                f.calculate_fee(
+                    message,
+                    f.lamports_per_signature,
+                    &compute_budget_limits.into(),
+                    self.feature_set
+                        .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
+                    self.feature_set
+                        .is_active(&remove_rounding_in_fee_calculation::id()),
+                )
+            },
         );
         let mut validated_fee_payer = false;
         let mut payer_key = None;
@@ -546,7 +562,7 @@ impl LiteSVM {
                         self.accounts.get_account(key).unwrap_or_else(|| {
                             account_found = false;
                             let mut default_account = AccountSharedData::default();
-                            default_account.set_rent_epoch(0);
+                            default_account.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
                             default_account
                         })
                     };
@@ -935,7 +951,9 @@ impl LiteSVM {
         self.set_sysvar(&RecentBlockhashes::from_iter([IterItem(
             0,
             &self.latest_blockhash,
-            self.fee_structure.lamports_per_signature,
+            self.fee_structure
+                .as_ref()
+                .map_or(0, |f| f.lamports_per_signature),
         )]));
     }
 
