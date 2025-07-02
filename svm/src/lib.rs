@@ -1143,6 +1143,10 @@ fn validate_fee_payer(
     payer_account.checked_sub_lamports(fee).unwrap();
 
     let payer_post_rent_state = RentState::from_account(payer_account, rent);
+    // TODO: update rent epoch if not RentExempt
+    if let RentState::RentExempt = payer_post_rent_state {
+        payer_account.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
+    }
     check_rent_state_with_account(
         &payer_pre_rent_state,
         &payer_post_rent_state,
