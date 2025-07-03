@@ -249,7 +249,10 @@ impl AccountsDb {
                 program_account.data().len(),
                 &mut LoadProgramMetrics::default(),
             )
-            .map_err(|_| InstructionError::InvalidAccountData)
+            .map_err(|e| {
+                error!("Error loading program: {:?}", e);
+                InstructionError::InvalidAccountData
+            })
         } else if bpf_loader_upgradeable::check_id(owner) {
             let Ok(UpgradeableLoaderState::Program {
                 programdata_address,
@@ -328,8 +331,11 @@ impl AccountsDb {
         if table_account.owner() == &address_lookup_table::program::id() {
             let slot_hashes = self.sysvar_cache.get_slot_hashes().unwrap();
             let current_slot = self.sysvar_cache.get_clock().unwrap().slot;
-            let lookup_table = AddressLookupTable::deserialize(table_account.data())
-                .map_err(|_ix_err| AddressLookupError::InvalidAccountData)?;
+            let lookup_table =
+                AddressLookupTable::deserialize(table_account.data()).map_err(|e| {
+                    error!("Error loading lookup table: {:?}", e);
+                    AddressLookupError::InvalidAccountData
+                })?;
 
             Ok(LoadedAddresses {
                 writable: lookup_table.lookup(

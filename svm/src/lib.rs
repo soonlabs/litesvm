@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use log::error;
+use log::{error, warn};
 use solana_bpf_loader_program::syscalls::create_program_runtime_environment_v1;
 use solana_compute_budget::{
     compute_budget::ComputeBudget,
@@ -28,6 +28,7 @@ use solana_sdk::{
     fee::FeeStructure,
     hash::Hash,
     inner_instruction::InnerInstructionsList,
+    instruction::InstructionError,
     message::{Message, SanitizedMessage, VersionedMessage},
     native_loader,
     native_token::LAMPORTS_PER_SOL,
@@ -283,16 +284,26 @@ impl LiteSVM {
         self.accounts.add_account(pubkey, data.into())
     }
 
+    /// Check if the error should be added to missing_accounts for retry
+    fn should_retry_on_error(error: &LiteSVMError) -> bool {
+        matches!(
+            error,
+            LiteSVMError::Instruction(InstructionError::MissingAccount)
+                | LiteSVMError::Instruction(InstructionError::InvalidAccountData)
+        )
+    }
+
     /// Import accounts from a vector of (pubkey, account) pairs.
     pub fn import_accounts(
         &mut self,
         accounts: Vec<(Pubkey, AccountSharedData)>,
     ) -> Result<(), LiteSVMError> {
+        let mut missing_accounts = Vec::new();
         for (pubkey, account) in accounts {
             if let Some(existing_account) = self.accounts.get_account(&pubkey) {
                 // compare the data of the existing account and the new account
                 if existing_account != account {
-                    error!(
+                    warn!(
                         "Account {pubkey} already exists with different data: existing: {:?}, new: {:?}",
                         existing_account,
                         account
@@ -302,11 +313,58 @@ impl LiteSVM {
                 }
             }
 
-            self.accounts.add_account(pubkey, account).map_err(|e| {
-                error!("Error importing account {pubkey}: {e:?}");
-                e
-            })?;
+            if let Err(e) = self.accounts.add_account(pubkey, account.clone()) {
+                if Self::should_retry_on_error(&e) {
+                    missing_accounts.push((pubkey, account));
+                } else {
+                    error!("Error importing account {pubkey}: {e:?}");
+                    return Err(e);
+                }
+            }
         }
+
+        // Keep retrying until no new missing accounts are added
+        loop {
+            if missing_accounts.is_empty() {
+                break;
+            }
+
+            log::info!(
+                "Re-importing missing accounts: {:?}",
+                missing_accounts
+                    .iter()
+                    .map(|(pubkey, _)| pubkey)
+                    .collect::<Vec<&Pubkey>>()
+            );
+
+            let mut new_missing_accounts = Vec::new();
+            let current_count = missing_accounts.len();
+            for (pubkey, account) in missing_accounts {
+                if let Err(e) = self.accounts.add_account(pubkey, account.clone()) {
+                    if Self::should_retry_on_error(&e) {
+                        new_missing_accounts.push((pubkey, account));
+                    } else {
+                        error!("Error importing account {pubkey}: {e:?}");
+                        return Err(e);
+                    }
+                }
+            }
+
+            // If no progress made (same number of missing accounts), break to avoid infinite loop
+            if new_missing_accounts.len() == current_count {
+                error!(
+                    "Unable to import accounts after retries, still missing: {:?}",
+                    new_missing_accounts
+                        .iter()
+                        .map(|(p, _)| p)
+                        .collect::<Vec<_>>()
+                );
+                return Err(LiteSVMError::Instruction(InstructionError::MissingAccount));
+            }
+
+            missing_accounts = new_missing_accounts;
+        }
+
         Ok(())
     }
 
