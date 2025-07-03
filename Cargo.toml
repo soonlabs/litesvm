@@ -18,21 +18,21 @@ litesvm = { path = "svm", version = "0.3" }
 log = "0.4"
 serde = "1.0"
 smallvec = "1.13"
-solana-address-lookup-table-program = { git = "https://github.com/soonlabs/agave", branch = "feat/risc0-zkvm" }
-solana-bpf-loader-program = { git = "https://github.com/soonlabs/agave", branch = "feat/risc0-zkvm" }
-solana-compute-budget = { git = "https://github.com/soonlabs/agave", branch = "feat/risc0-zkvm" }
-solana-compute-budget-program = { git = "https://github.com/soonlabs/agave", branch = "feat/risc0-zkvm" }
-solana-config-program = { git = "https://github.com/soonlabs/agave", branch = "feat/risc0-zkvm" }
-solana-loader-v4-program = { git = "https://github.com/soonlabs/agave", branch = "feat/risc0-zkvm" }
-solana-program = { git = "https://github.com/soonlabs/agave", branch = "feat/risc0-zkvm" }
-solana-program-runtime = { git = "https://github.com/soonlabs/agave", branch = "feat/risc0-zkvm" }
-solana-program-test = { git = "https://github.com/soonlabs/agave", branch = "feat/risc0-zkvm" }
-solana-runtime-transaction = { git = "https://github.com/soonlabs/agave", branch = "feat/risc0-zkvm" }
-solana-sdk = { git = "https://github.com/soonlabs/agave", branch = "feat/risc0-zkvm" }
-solana-stake-program = { git = "https://github.com/soonlabs/agave", branch = "feat/risc0-zkvm" }
-solana-svm = { git = "https://github.com/soonlabs/agave", branch = "feat/risc0-zkvm" }
-solana-system-program = { git = "https://github.com/soonlabs/agave", branch = "feat/risc0-zkvm" }
-solana-vote-program = { git = "https://github.com/soonlabs/agave", branch = "feat/risc0-zkvm" }
+solana-address-lookup-table-program = { git = "https://github.com/soonlabs/agave", branch = "upgrade_curve25519" }
+solana-bpf-loader-program = { git = "https://github.com/soonlabs/agave", branch = "upgrade_curve25519" }
+solana-compute-budget = { git = "https://github.com/soonlabs/agave", branch = "upgrade_curve25519" }
+solana-compute-budget-program = { git = "https://github.com/soonlabs/agave", branch = "upgrade_curve25519" }
+solana-config-program = { git = "https://github.com/soonlabs/agave", branch = "upgrade_curve25519" }
+solana-loader-v4-program = { git = "https://github.com/soonlabs/agave", branch = "upgrade_curve25519" }
+solana-program = { git = "https://github.com/soonlabs/agave", branch = "upgrade_curve25519" }
+solana-program-runtime = { git = "https://github.com/soonlabs/agave", branch = "upgrade_curve25519" }
+solana-program-test = { git = "https://github.com/soonlabs/agave", branch = "upgrade_curve25519" }
+solana-runtime-transaction = { git = "https://github.com/soonlabs/agave", branch = "upgrade_curve25519" }
+solana-sdk = { git = "https://github.com/soonlabs/agave", branch = "upgrade_curve25519" }
+solana-stake-program = { git = "https://github.com/soonlabs/agave", branch = "upgrade_curve25519" }
+solana-svm = { git = "https://github.com/soonlabs/agave", branch = "upgrade_curve25519" }
+solana-system-program = { git = "https://github.com/soonlabs/agave", branch = "upgrade_curve25519" }
+solana-vote-program = { git = "https://github.com/soonlabs/agave", branch = "upgrade_curve25519" }
 spl-associated-token-account-client = "1.0"
 spl-token = "6.0.0"
 spl-token-2022 = "6.0.0"
@@ -56,5 +56,5 @@ codegen-units = 1
 result_large_err = "allow"
 
 [patch.crates-io]
-solana-program = { git = "https://github.com/soonlabs/agave", branch = "feat/risc0-zkvm" }
-solana-zk-token-sdk = { git = "https://github.com/soonlabs/agave", branch = "feat/risc0-zkvm" }
+solana-program = { git = "https://github.com/soonlabs/agave", branch = "upgrade_curve25519" }
+solana-zk-token-sdk = { git = "https://github.com/soonlabs/agave", branch = "upgrade_curve25519" }

@@ -77,17 +77,6 @@ mod precompiles;
 mod spl;
 mod utils;
 
-pub use solana_sdk as svm_sdk;
-pub use solana_sdk::account::Account as LiteSVMAccount;
-pub use solana_sdk::account::AccountSharedData as LiteSVMAccountSharedData;
-pub use solana_sdk::account::ReadableAccount as LiteSVMAccountReadable;
-pub use solana_sdk::account::WritableAccount as LiteSVMAccountWritable;
-pub use solana_sdk::message::Message as LiteSVMMessage;
-pub use solana_sdk::pubkey::Pubkey as LiteSVMPubkey;
-pub use solana_sdk::signer::Signer as LiteSVMSigner;
-pub use solana_sdk::system_instruction::{create_account, transfer};
-pub use solana_sdk::transaction::Transaction as LiteSVMTransaction;
-
 // The test code doesn't actually get run because it's not
 // what doctest expects but at least it
 // compiles it so we'll see if there's a compile-time error.
