@@ -948,7 +948,9 @@ impl LiteSVM {
             TransactionResult::Ok(meta) => fees += meta.fee,
             TransactionResult::Err(err) => fees += err.meta.fee,
         });
-        self.add_or_update_user_account(fee_collector, fees)?;
+        if fees > 0 {
+            self.add_or_update_user_account(fee_collector, fees)?;
+        }
         Ok(())
     }
 
@@ -968,6 +970,19 @@ impl LiteSVM {
             self.set_account(pubkey, Account::new(lamports, 0, &system_program::id()))?;
         }
         Ok(())
+    }
+
+    pub fn execute_block_transactions(
+        &mut self,
+        txs: Vec<impl Into<VersionedTransaction>>,
+        fee_collector: Pubkey,
+    ) -> Result<Vec<TransactionResult>, LiteSVMError> {
+        let mut results = Vec::with_capacity(txs.len());
+        for tx in txs {
+            results.push(self.send_transaction(tx));
+        }
+        self.seal_block(&results, fee_collector)?;
+        Ok(results)
     }
 
     /// Submits a signed transaction.
