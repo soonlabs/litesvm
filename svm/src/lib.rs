@@ -47,7 +47,7 @@ use solana_sdk::{
     transaction::{MessageHash, SanitizedTransaction, TransactionError, VersionedTransaction},
     transaction_context::{ExecutionRecord, IndexOfAccount, TransactionContext},
 };
-use solana_svm::message_processor::MessageProcessor;
+use solana_svm::{account_loader::collect_rent_from_account, message_processor::MessageProcessor};
 use solana_system_program::{get_system_account_kind, SystemAccountKind};
 use std::{cell::RefCell, path::Path, rc::Rc, sync::Arc};
 use types::SimulatedTransactionInfo;
@@ -553,6 +553,7 @@ impl LiteSVM {
         Option<TransactionContext>,
         u64,
         Option<Pubkey>,
+        u64, // fee_payer_rent_debit
     ) {
         let compute_budget = self.compute_budget.unwrap_or_else(|| ComputeBudget {
             compute_unit_limit: u64::from(compute_budget_limits.compute_unit_limit),
@@ -587,6 +588,7 @@ impl LiteSVM {
         );
         let mut validated_fee_payer = false;
         let mut payer_key = None;
+        let mut fee_payer_rent_debit = 0;
         let maybe_accounts = account_keys
             .iter()
             .enumerate()
@@ -616,6 +618,14 @@ impl LiteSVM {
                     if !validated_fee_payer
                         && (!message.is_invoked(i) || message.is_instruction_account(i))
                     {
+                        fee_payer_rent_debit = collect_rent_from_account(
+                            &self.feature_set,
+                            &Default::default(), // TODO: pass rent collector later
+                            key,
+                            &mut account,
+                        )
+                        .rent_amount;
+
                         validate_fee_payer(
                             key,
                             &mut account,
@@ -625,6 +635,14 @@ impl LiteSVM {
                         )?;
                         validated_fee_payer = true;
                         payer_key = Some(*key);
+                    } else if message.is_writable(i) {
+                        fee_payer_rent_debit = collect_rent_from_account(
+                            &self.feature_set,
+                            &Default::default(), // TODO: pass rent collector later
+                            key,
+                            &mut account,
+                        )
+                        .rent_amount;
                     }
                     account
                 };
@@ -635,7 +653,14 @@ impl LiteSVM {
         let mut accounts = match maybe_accounts {
             Ok(accs) => accs,
             Err(e) => {
-                return (Err(e), accumulated_consume_units, None, fee, payer_key);
+                return (
+                    Err(e),
+                    accumulated_consume_units,
+                    None,
+                    fee,
+                    payer_key,
+                    fee_payer_rent_debit,
+                );
             }
         };
         if !validated_fee_payer {
@@ -646,6 +671,7 @@ impl LiteSVM {
                 None,
                 fee,
                 payer_key,
+                fee_payer_rent_debit,
             );
         }
         let builtins_start_index = accounts.len();
@@ -728,9 +754,17 @@ impl LiteSVM {
                     Some(context),
                     fee,
                     payer_key,
+                    fee_payer_rent_debit,
                 )
             }
-            Err(e) => (Err(e), accumulated_consume_units, None, fee, payer_key),
+            Err(e) => (
+                Err(e),
+                accumulated_consume_units,
+                None,
+                fee,
+                payer_key,
+                fee_payer_rent_debit,
+            ),
         }
     }
 
@@ -790,6 +824,7 @@ impl LiteSVM {
                     result,
                     compute_units_consumed,
                     context,
+                    fee_payer_rent_debit, // TODO: return rent debit if tx failed
                 },
             fee,
             payer_key,
@@ -815,6 +850,7 @@ impl LiteSVM {
                     result,
                     compute_units_consumed,
                     context,
+                    fee_payer_rent_debit: _,
                 },
             ..
         } = match self.check_and_process_transaction(&sanitized_tx) {
@@ -850,7 +886,7 @@ impl LiteSVM {
         self.maybe_blockhash_check(sanitized_tx)?;
         let compute_budget_limits = get_compute_budget_limits(sanitized_tx)?;
         self.maybe_history_check(sanitized_tx)?;
-        let (result, compute_units_consumed, context, fee, payer_key) =
+        let (result, compute_units_consumed, context, fee, payer_key, fee_payer_rent_debit) =
             self.process_transaction(sanitized_tx, compute_budget_limits);
         Ok(CheckAndProcessTransactionSuccess {
             core: {
@@ -858,6 +894,7 @@ impl LiteSVM {
                     result,
                     compute_units_consumed,
                     context,
+                    fee_payer_rent_debit,
                 }
             },
             fee,
@@ -1079,6 +1116,7 @@ struct CheckAndProcessTransactionSuccessCore {
     result: Result<(), TransactionError>,
     compute_units_consumed: u64,
     context: Option<TransactionContext>,
+    fee_payer_rent_debit: u64,
 }
 
 struct CheckAndProcessTransactionSuccess {
@@ -1190,10 +1228,6 @@ fn validate_fee_payer(
     payer_account.checked_sub_lamports(fee).unwrap();
 
     let payer_post_rent_state = RentState::from_account(payer_account, rent);
-    // TODO: update rent epoch if not RentExempt
-    if let RentState::RentExempt = payer_post_rent_state {
-        payer_account.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
-    }
     check_rent_state_with_account(
         &payer_pre_rent_state,
         &payer_post_rent_state,
