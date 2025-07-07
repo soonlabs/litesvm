@@ -29,4 +29,9 @@ pub enum LiteSVMError {
     InvalidSysvarData(#[from] InvalidSysvarDataError),
     #[error("{0}")]
     Instruction(#[from] InstructionError),
+
+    #[error("Add overflow")]
+    AddOverflow,
+    #[error("Sub overflow")]
+    SubOverflow,
 }

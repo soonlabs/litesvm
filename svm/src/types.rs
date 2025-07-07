@@ -18,6 +18,7 @@ pub struct TransactionMetadata {
     pub inner_instructions: InnerInstructionsList,
     pub compute_units_consumed: u64,
     pub return_data: TransactionReturnData,
+    pub fee: u64,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -57,6 +58,7 @@ pub(crate) struct ExecutionResult {
     pub(crate) return_data: TransactionReturnData,
     /// Whether the transaction can be included in a block
     pub(crate) included: bool,
+    pub(crate) fee: u64,
 }
 
 impl Default for ExecutionResult {
@@ -69,6 +71,7 @@ impl Default for ExecutionResult {
             inner_instructions: Default::default(),
             return_data: Default::default(),
             included: false,
+            fee: 0,
         }
     }
 }
@@ -77,10 +80,12 @@ impl ExecutionResult {
     pub(crate) fn result_and_compute_units(
         tx_result: Result<()>,
         compute_units_consumed: u64,
+        fee: u64,
     ) -> Self {
         Self {
             tx_result,
             compute_units_consumed,
+            fee,
             ..Default::default()
         }
     }

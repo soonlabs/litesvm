@@ -834,9 +834,9 @@ impl LiteSVM {
         };
         if let Some(ctx) = context {
             let tx_result = self.check_tx_result(result, payer_key, fee);
-            execution_result_if_context(sanitized_tx, ctx, tx_result, compute_units_consumed)
+            execution_result_if_context(sanitized_tx, ctx, tx_result, compute_units_consumed, fee)
         } else {
-            ExecutionResult::result_and_compute_units(result, compute_units_consumed)
+            ExecutionResult::result_and_compute_units(result, compute_units_consumed, fee)
         }
     }
 
@@ -852,15 +852,16 @@ impl LiteSVM {
                     context,
                     fee_payer_rent_debit: _,
                 },
+            fee,
             ..
         } = match self.check_and_process_transaction(&sanitized_tx) {
             Ok(value) => value,
             Err(value) => return value,
         };
         if let Some(ctx) = context {
-            execution_result_if_context(sanitized_tx, ctx, result, compute_units_consumed)
+            execution_result_if_context(sanitized_tx, ctx, result, compute_units_consumed, fee)
         } else {
-            ExecutionResult::result_and_compute_units(result, compute_units_consumed)
+            ExecutionResult::result_and_compute_units(result, compute_units_consumed, fee)
         }
     }
 
@@ -937,6 +938,38 @@ impl LiteSVM {
         })
     }
 
+    pub fn seal_block(
+        &mut self,
+        results: &[TransactionResult],
+        fee_collector: Pubkey,
+    ) -> Result<(), LiteSVMError> {
+        let mut fees = 0;
+        results.iter().for_each(|r| match r {
+            TransactionResult::Ok(meta) => fees += meta.fee,
+            TransactionResult::Err(err) => fees += err.meta.fee,
+        });
+        self.add_or_update_user_account(fee_collector, fees)?;
+        Ok(())
+    }
+
+    fn add_or_update_user_account(
+        &mut self,
+        pubkey: Pubkey,
+        lamports: u64,
+    ) -> Result<(), LiteSVMError> {
+        if let Some(mut account) = self.accounts.get_account(&pubkey) {
+            let new_lamports = account
+                .lamports()
+                .checked_add(lamports)
+                .ok_or(LiteSVMError::AddOverflow)?;
+            account.set_lamports(new_lamports);
+            self.set_account(pubkey, account.into())?;
+        } else {
+            self.set_account(pubkey, Account::new(lamports, 0, &system_program::id()))?;
+        }
+        Ok(())
+    }
+
     /// Submits a signed transaction.
     pub fn send_transaction(&mut self, tx: impl Into<VersionedTransaction>) -> TransactionResult {
         let vtx: VersionedTransaction = tx.into();
@@ -948,6 +981,7 @@ impl LiteSVM {
             inner_instructions,
             return_data,
             included,
+            fee,
         } = if self.sigverify {
             self.execute_transaction(vtx)
         } else {
@@ -966,6 +1000,7 @@ impl LiteSVM {
             compute_units_consumed,
             return_data,
             signature,
+            fee,
         };
 
         if let Err(tx_err) = tx_result {
@@ -997,6 +1032,7 @@ impl LiteSVM {
             compute_units_consumed,
             inner_instructions,
             return_data,
+            fee,
             ..
         } = if self.sigverify {
             self.execute_transaction_readonly(tx.into())
@@ -1016,6 +1052,7 @@ impl LiteSVM {
             inner_instructions,
             compute_units_consumed,
             return_data,
+            fee,
         };
 
         if let Err(tx_err) = tx_result {
@@ -1130,6 +1167,7 @@ fn execution_result_if_context(
     ctx: TransactionContext,
     result: Result<(), TransactionError>,
     compute_units_consumed: u64,
+    fee: u64,
 ) -> ExecutionResult {
     let (signature, return_data, inner_instructions, post_accounts) =
         execute_tx_helper(sanitized_tx, ctx);
@@ -1141,6 +1179,7 @@ fn execution_result_if_context(
         compute_units_consumed,
         return_data,
         included: true,
+        fee,
     }
 }
 
